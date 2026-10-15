@@ -1,7 +1,7 @@
 // Standards: (1) list material incorporated by reference (IBR) in a CFR part from its eCFR IBR section;
 // (2) build official purchase/info links for standards bodies. Never returns standard text (copyrighted).
 import { json, request, requireText, requireInt } from "./http.js";
-import { latestDate } from "./ecfr.js";
+import { latestDate, cleanSection, cleanPart } from "./ecfr.js";
 const ECFR = process.env.ECFR_API_BASE || "https://www.ecfr.gov/api";
 export const COPYRIGHT = "Standards are copyrighted by their publishers. This tool lists citations and links only; it does not show standard text. IBR material can also be viewed at the agency or NARA (see the IBR section).";
 
@@ -37,19 +37,29 @@ export function splitDesignation(id) {
 const MARK = /IBR approved for|,?\s+into\s+§/i;
 const MARK_SRC = "(?:;\\s*IBR approved|,?\\s+into\\s+§)";
 
+const romanInt = (r) => { const v = { i: 1, v: 5, x: 10 }; let n = 0; for (let k = 0; k < r.length; k++) { const a = v[r[k]], b = v[r[k + 1]] || 0; n += a < b ? -a : a; } return n; };
+
 // Parse an eCFR IBR section (XML) into publishers and their standards.
 export function parseIbr(xml) {
   const paras = [...String(xml).matchAll(/<P>([\s\S]*?)<\/P>/g)].map((m) => m[1]);
   const publishers = [];
-  let cur = null;
-  for (const raw of paras) {
+  let cur = null, prevRoman = 0;
+  for (let pi = 0; pi < paras.length; pi++) {
+    const raw = paras[pi];
     const text = clean(raw);
+    const nextRoman = (clean(paras[pi + 1] || "").match(/^\(([ivx]+)\)\s/) || [])[1];
     const letter = text.match(/^\(([a-z])\)\s+(.*)$/);
     let num = text.match(/^\((\d+)\)\s+(.*)$/);
     // "(i)", "(ii)" sub-items that list a standard (40 CFR 60.17) belong to the current publisher.
     const roman = text.match(/^\(([ivx]+)\)\s+(.*)$/);
     const romanItem = Boolean(roman && cur && cur.standards.length && MARK.test(text));
     if (romanItem) num = roman;
+    // "(i)".."(v)" under a numbered standard (10 CFR 430.3 lists its sections that way) are not publishers:
+    // a single-letter roman is a sub-item when the previous paragraph was a roman sub-item or it is not the next letter.
+    const continuesRoman = Boolean(roman && prevRoman && romanInt(roman[1]) === prevRoman + 1);
+    const isRomanSub = Boolean(roman && cur && !romanItem && (continuesRoman || roman[1].length > 1 || (nextRoman && romanInt(nextRoman) === romanInt(roman[1]) + 1) || String.fromCharCode(cur.letter.charCodeAt(0) + 1) !== roman[1]));
+    prevRoman = roman && (romanItem || isRomanSub) ? romanInt(roman[1]) : 0;
+    if (isRomanSub) continue;
     if (letter && !romanItem) {
       const rest = letter[2];
       if (/resellers?/i.test(rest) && !MARK.test(rest)) { cur = null; continue; } // reseller list, not a publisher
@@ -117,9 +127,9 @@ async function sectionXml(title, part, section, asOf) {
 
 export async function ibrStandards({ title, part, section } = {}) {
   title = String(requireInt(title, "title", 1, 50));
-  let sec = section != null && section !== "" ? String(section).replace(/^§\s*/, "").trim() : null;
+  let sec = section != null && section !== "" ? cleanSection(section, title) : null;
   if (sec && !/^\d+[A-Za-z]?\.\d+[A-Za-z0-9-]*$/.test(sec)) throw new Error('section must look like "15.38" or "15.31".');
-  part = part != null && part !== "" ? String(part).trim() : sec ? sec.split(".")[0] : null;
+  part = part != null && part !== "" ? cleanPart(part) : sec ? sec.split(".")[0] : null;
   if (!part) throw new Error("Give part (e.g. 15) or section (e.g. 15.38).");
   const asOf = await latestDate(title);
   // A section that itself lists IBR material is the IBR section (works even when its heading is unusual).

@@ -213,3 +213,31 @@ test("edge cases: regex-special ASTM numbers, LIKE wildcards, bad dates and part
   await assert.rejects(federalRegisterSearch({ cfrTitle: 47, cfrPart: "15 OR 1" }), /cfrPart/);
   await assert.rejects(fccGranteeLookup({ name: "%%%" }), /Give fccId/);
 });
+
+test("round 3: roman sub-items are not publishers, citation forms, part prefixes, FR limit 1", async () => {
+  const xml = `<P>(g) ASHRAE. American Society of Heating, Refrigerating, and Air-Conditioning Engineers, Inc., 180 Technology Parkway, Peachtree Corners, GA 30092; www.ashrae.org.</P>
+<P>(1) ASME BPVC 2017 (as follows), into §§ 172.102.</P>
+<P>(i) ASME BPVC.II.A-2017, Section II.</P><P>(ii) ASME BPVC.V-2017, Section V.</P>
+<P>(17) ANSI/ASHRAE Standard 37-2009, <I>Methods of Testing for Rating Electrically Driven Unitary Air-Conditioning and Heat Pump Equipment,</I> approved June 24, 2009; IBR approved for appendix M to subpart B, as follows:</P>
+<P>(i) Section 5—Instruments;</P><P>(ii) Section 6—Apparatus;</P><P>(iii) Section 7—Methods;</P><P>(iv) Section 8—Procedure;</P><P>(v) Section 9—Primary Refrigerant Calorimeter Method; and</P><P>(vi) Section 11—Lubrication.</P>
+<P>(18) ANSI/ASHRAE Standard 103-2017, <I>Method of Testing for Annual Fuel Utilization Efficiency,</I> ANSI-approved July 3, 2017; IBR approved for § 430.23.</P>
+<P>(h) CSA. CSA Group, 178 Rexdale Blvd., Toronto; www.csagroup.org.</P>
+<P>(1) CSA C390-10, <I>Test methods for motors,</I> 2010; IBR approved for § 431.19.</P>
+<P>(i) DOE. Department of Energy, 1000 Independence Ave.; www.energy.gov.</P>
+<P>(1) DOE Doc X, <I>Thing,</I> 2020; IBR approved for § 430.2.</P>`;
+  const p = parseIbr(xml);
+  assert.deepEqual(p.map((x) => x.letter), ["g", "h", "i"]);
+  assert.equal(p[0].standards.length, 3);
+  const { cleanSection, cleanPart } = await import("../src/ecfr.js");
+  assert.equal(cleanSection("47 CFR 15.109", 47), "15.109");
+  assert.equal(cleanSection("Sec. 15.31", 47), "15.31");
+  assert.equal(cleanSection("§§ 15.31"), "15.31");
+  assert.throws(() => cleanSection("47 CFR 15.109", 10), /use title 47/);
+  assert.equal(cleanPart("Part 15"), "15");
+  let url;
+  const restore = mockFetch(async (u) => { url = decodeURIComponent(String(u)); return ok({ count: 3, results: [FR_DOC, FR_DOC, FR_DOC] }); });
+  try {
+    const r = await federalRegisterSearch({ term: "lamp", cfrTitle: 47, cfrPart: "Part 15", limit: 1 });
+    assert.equal(r.results.length, 1); assert.match(url, /per_page=2/); assert.match(url, /\[part\]=15(&|$)/);
+  } finally { restore(); }
+});

@@ -29,9 +29,12 @@ export async function federalRegisterSearch({ term, agencies, types, cfrTitle, c
   if (!t && !ag.length && !cfrTitle) throw new Error("Give at least one of term, agencies or cfrTitle.");
   for (const d of [from, to]) if (d && !DATE.test(d)) throw new Error("Dates must be YYYY-MM-DD.");
   if (from && to && from > to) throw new Error("from must be on or before to.");
+  if (cfrPart != null && cfrPart !== "") cfrPart = String(cfrPart).trim().replace(/^part\s+/i, "");
   if (cfrPart && !cfrTitle) throw new Error("cfrPart needs cfrTitle.");
   if (cfrPart && !/^\d+[A-Za-z]?$/.test(String(cfrPart).trim())) throw new Error('cfrPart must be a part number like "15".');
-  const q = new URLSearchParams({ per_page: String(clampLimit(limit, 10, 100)), order: "newest" });
+  const lim = clampLimit(limit, 10, 100);
+  // The Federal Register API treats per_page=1 as its default (20), so ask for at least 2 and trim.
+  const q = new URLSearchParams({ per_page: String(Math.max(2, lim)), order: "newest" });
   for (const f of FIELDS) q.append("fields[]", f);
   if (t) q.set("conditions[term]", t);
   for (const a of ag) q.append("conditions[agencies][]", String(a).trim().toLowerCase().replace(/\s+/g, "-"));
@@ -52,5 +55,5 @@ export async function federalRegisterSearch({ term, agencies, types, cfrTitle, c
     if (/HTTP 400/.test(e.message) && /agencies/.test(e.message)) throw new Error('Federal Register: unknown agency slug. Use slugs like "federal-communications-commission" or "patent-and-trademark-office".');
     throw e;
   }
-  return { description: d?.description || null, total: d?.count ?? 0, results: (d?.results || []).map(normalizeDocument) };
+  return { description: d?.description || null, total: d?.count ?? 0, results: (d?.results || []).slice(0, lim).map(normalizeDocument) };
 }
