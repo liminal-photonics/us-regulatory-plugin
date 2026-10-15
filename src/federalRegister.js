@@ -1,5 +1,5 @@
 // Federal Register API, key-free. https://www.federalregister.gov/developers/documentation/api/v1
-import { json, clampLimit } from "./http.js";
+import { json, clampLimit, requireInt } from "./http.js";
 const BASE = process.env.FEDERAL_REGISTER_API_BASE || "https://www.federalregister.gov/api/v1";
 const FIELDS = ["title", "type", "action", "abstract", "document_number", "publication_date", "effective_on", "comments_close_on", "agencies", "cfr_references", "docket_ids", "html_url", "pdf_url"];
 export const DOC_TYPES = { rule: "RULE", proposed_rule: "PRORULE", notice: "NOTICE", presidential_document: "PRESDOCU" };
@@ -39,7 +39,7 @@ export async function federalRegisterSearch({ term, agencies, types, cfrTitle, c
     if (!Object.values(DOC_TYPES).includes(code)) throw new Error(`Unknown document type "${x}". Use rule, proposed_rule, notice or presidential_document.`);
     q.append("conditions[type][]", code);
   }
-  if (cfrTitle) q.set("conditions[cfr][title]", String(cfrTitle));
+  if (cfrTitle) q.set("conditions[cfr][title]", String(requireInt(cfrTitle, "cfrTitle", 1, 50)));
   if (cfrPart) q.set("conditions[cfr][part]", String(cfrPart));
   if (from) q.set("conditions[publication_date][gte]", from);
   if (to) q.set("conditions[publication_date][lte]", to);

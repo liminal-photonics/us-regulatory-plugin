@@ -2,7 +2,8 @@
 export const TIMEOUT_MS = Number(process.env.US_REGULATORY_TIMEOUT_MS) || 20000;
 const UA = "us-regulatory-plugin/0.1 (+https://github.com/liminal-photonics/us-regulatory-plugin)";
 
-export async function request(name, url, init = {}) {
+// One automatic retry on HTTP 429 after Retry-After (capped at 5 s, default 2 s), then a clear error.
+export async function request(name, url, init = {}, attempt = 0) {
   let res;
   try {
     res = await fetch(url, { ...init, headers: { "User-Agent": UA, ...(init.headers || {}) }, signal: AbortSignal.timeout(TIMEOUT_MS) });
@@ -12,6 +13,11 @@ export async function request(name, url, init = {}) {
   }
   if (res.status === 429) {
     const after = res.headers?.get?.("retry-after");
+    if (attempt === 0 && !process.env.NO_RETRY_429) {
+      const wait = Math.min(5, Number(after) || 2) * 1000;
+      await new Promise((r) => setTimeout(r, wait));
+      return request(name, url, init, 1);
+    }
     throw new Error(`${name} rate limit reached${after ? `; retry after ${after} s` : ""}. Wait and try again.`);
   }
   return res;
@@ -25,7 +31,17 @@ export async function json(name, url, init) {
     try { detail = (await res.text()).replace(/\s+/g, " ").slice(0, 200); } catch {}
     throw new Error(`${name} HTTP ${res.status}${detail ? `: ${detail}` : ""}`);
   }
-  return res.json();
+  try {
+    return await res.json();
+  } catch {
+    throw new Error(`${name} returned a response that is not JSON (the service may be down or changed).`);
+  }
+}
+
+export function requireInt(v, field, min, max) {
+  const n = Number(v);
+  if (!Number.isInteger(n) || n < min || n > max) throw new Error(`${field} must be a whole number from ${min} to ${max}.`);
+  return n;
 }
 
 export function requireText(v, field) {

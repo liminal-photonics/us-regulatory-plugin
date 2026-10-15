@@ -27,5 +27,15 @@ await run(process.env, async (call, c) => {
   console.log("FCC_BY_NAME", gn.results.map((r) => `${r.granteeCode} ${r.granteeName}`).join("; "));
   const gx = await call("fcc_grantee_lookup", { fccId: "2BZZZ-NOTREAL" });
   console.log("FCC_UNKNOWN results", gx.results.length);
+  const ibr = await call("ibr_standards", { title: 47, section: "15.38" });
+  console.log("IBR", ibr.ibrSection, "as of", ibr.asOf, "| standards", ibr.count, "| publishers", ibr.publishers.map((p) => p.publisher).join("; "));
+  for (const p of ibr.publishers.slice(0, 6)) for (const st of p.standards.slice(0, 2)) console.log("   ", st.designation, "| ed", st.edition, "| for", st.approvedFor.join(","), "|", (st.title || "").slice(0, 60));
+  const ibf = await call("ibr_standards", { title: 47, section: "15.31" });
+  console.log("IBR_FOR_15.31", ibf.publishers.flatMap((p) => p.standards.map((x) => x.designation)).join(", "));
+  console.log("IBR_NONE", JSON.stringify((await call("ibr_standards", { title: 47, part: "68" })).note));
+  for (const [body, number] of [["ansi", "C63.4-2014"], ["ul", "8750"], ["ul", "99999"], ["astm", "E308-22"], ["ieee", "1789-2015"], ["nfpa", "70"], ["iec", "62471"], ["iso", "11664-2"], ["cie", "S 026"], ["ies", "LM-79-19"], ["nema", "C78.377"]]) {
+    const l = await call("standards_link", { body, number });
+    console.log("LINK", body, number, "->", (l.links || []).map((x) => `${x.kind}${x.verified ? " (verified)" : x.verifyNote ? " (unverified)" : ""}: ${x.url}`).join(" | "), l.ERROR || "");
+  }
   console.log("EMPTY_INPUT", JSON.stringify(await call("ecfr_search", { query: " " })));
 });

@@ -13,12 +13,14 @@ Answer from the current regulation text, with citations, using the `us-regulator
 2. Read each relevant section with `ecfr_get_section` (`title: 47`, `section: "15.109"` etc.). Quote the exact language and table values that answer the question, not a paraphrase from memory.
 3. Check related sections the text points to (definitions in 15.3, measurement rules in 15.31–15.35, labeling in 15.19, user information in 15.105, equipment authorization in Part 2).
 4. If the user names a module or radio by FCC ID, call `fcc_grantee_lookup` to identify the grantee. It does not confirm the grant itself (that data is not available key-free); point the user to FCC EAS for the grant and its test reports.
-5. Check for pending changes with `federal_register_search` (`agencies: ["federal-communications-commission"]`, `cfrTitle: 47`, `cfrPart: "15"`, recent `from` date).
+5. When the text cites a measurement standard (e.g. "ANSI C63.4-2014"), call `ibr_standards` (`title: 47`, `section` = the section that cites it, e.g. "15.31") to get the exact incorporated edition, then `standards_link` (e.g. `body: "ieee"` or `"ansi"`, `number: "C63.4-2014"`) for where to buy it. Never quote or summarize a standard's contents from memory; standards are copyrighted. Give the citation, edition and link. The IBR section (47 CFR 15.38) also lists free inspection at the FCC and NARA.
+6. Check for pending changes with `federal_register_search` (`agencies: ["federal-communications-commission"]`, `cfrTitle: 47`, `cfrPart: "15"`, recent `from` date).
 
 ## Output
 
 - The answer in plain language, then the quoted text with citation (e.g. "47 CFR 15.109(a)") and the eCFR "as of" date.
 - Units exactly as written (e.g. microvolts/meter at 3 meters). Do not convert units unless asked, and show the math if you do.
+- Any incorporated standards with edition and purchase link.
 - Any pending or recent rule changes found.
 - A note that the eCFR is an editorial compilation, not the official legal edition, and that equipment authorization questions (SDoC vs. certification) should be confirmed with a test lab or TCB.
 

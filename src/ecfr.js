@@ -1,5 +1,5 @@
 // eCFR (Electronic Code of Federal Regulations) API, key-free. https://www.ecfr.gov/developers/documentation/api/v1
-import { json, request, requireText, clampLimit, stripTags } from "./http.js";
+import { json, request, requireText, requireInt, clampLimit, stripTags } from "./http.js";
 const BASE = process.env.ECFR_API_BASE || "https://www.ecfr.gov/api";
 
 export function normalizeSearchResult(r) {
@@ -18,13 +18,13 @@ export function normalizeSearchResult(r) {
 export async function ecfrSearch({ query, title, part, limit } = {}) {
   query = requireText(query, "query");
   const q = new URLSearchParams({ query, per_page: String(clampLimit(limit, 10, 50)), date: "current" });
-  if (title != null && title !== "") q.set("hierarchy[title]", String(title));
+  if (title != null && title !== "") q.set("hierarchy[title]", String(requireInt(title, "title", 1, 50)));
   if (part != null && part !== "") q.set("hierarchy[part]", String(part));
   const d = await json("eCFR", `${BASE}/search/v1/results?${q}`);
   return { query, total: d?.meta?.total_count ?? 0, results: (d?.results || []).map(normalizeSearchResult) };
 }
 
-async function latestDate(title) {
+export async function latestDate(title) {
   const d = await json("eCFR", `${BASE}/versioner/v1/titles.json`);
   const t = (d?.titles || []).find((x) => String(x.number) === String(title));
   if (!t) throw new Error(`eCFR: title ${title} not found.`);
@@ -43,13 +43,15 @@ export function xmlToText(xml) {
 }
 
 export async function ecfrGetSection({ title, section, date } = {}) {
-  title = requireText(title, "title").replace(/\D/g, "");
+  title = String(requireInt(title, "title", 1, 50));
+  if (date != null && date !== "" && !/^\d{4}-\d{2}-\d{2}$/.test(String(date))) throw new Error("date must be YYYY-MM-DD.");
   section = requireText(section, "section").replace(/^§\s*/, "");
   if (!/^\d+[A-Za-z]?\.\d+[A-Za-z0-9-]*$/.test(section)) throw new Error('section must look like "15.109" (part.section).');
   const part = section.split(".")[0];
-  const asOf = date || (await latestDate(title));
+  const asOf = date ? String(date) : await latestDate(title);
   const res = await request("eCFR", `${BASE}/versioner/v1/full/${asOf}/title-${title}.xml?part=${encodeURIComponent(part)}&section=${encodeURIComponent(section)}`, { headers: { "Accept-Encoding": "gzip" } });
   if (res.status === 404) return null;
+  if (res.status === 400) throw new Error(`eCFR has no version of ${title} CFR ${section} for ${asOf} (the date may be before the section existed or after the latest update).`);
   if (!res.ok) throw new Error(`eCFR HTTP ${res.status}`);
   const xml = await res.text();
   const text = xmlToText(xml);

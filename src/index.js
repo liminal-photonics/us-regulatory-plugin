@@ -5,6 +5,7 @@ import { CallToolRequestSchema, ListToolsRequestSchema } from "@modelcontextprot
 import { ecfrSearch, ecfrGetSection } from "./ecfr.js";
 import { federalRegisterSearch } from "./federalRegister.js";
 import { fccGranteeLookup } from "./fcc.js";
+import { ibrStandards, standardsLink, BODIES } from "./standards.js";
 import { status } from "./core.js";
 
 const TOOLS = [
@@ -38,6 +39,16 @@ const TOOLS = [
     description: "Look up an FCC equipment authorization grantee by FCC ID (uses its grantee-code prefix), grantee code or company name, from the FCC Open Data grantee registry. That registry was last refreshed in March 2021 and does not show individual FCC ID grants; the result links to FCC EAS to confirm.",
     inputSchema: { type: "object", properties: { fccId: { type: "string" }, granteeCode: { type: "string" }, name: { type: "string" }, limit: { type: "integer", minimum: 1, maximum: 50, default: 10 } } },
   },
+  {
+    name: "ibr_standards",
+    description: "List standards incorporated by reference (IBR) in a CFR part, from the part's eCFR \"Incorporation by reference\" section (e.g. 47 CFR 15.38): publisher, designation, number, edition, title and the sections each is approved for. Pass a section (e.g. 15.31) to list only the standards approved for it. Citations only; standard text is copyrighted.",
+    inputSchema: { type: "object", properties: { title: { type: "integer", minimum: 1, maximum: 50 }, part: { type: "string" }, section: { type: "string", description: 'e.g. "15.38" (the IBR section) or "15.31" (filter)' } }, required: ["title"] },
+  },
+  {
+    name: "standards_link",
+    description: "Official purchase/info links for a standard: a checked product page where the body has a stable URL (UL, ASTM, IEEE, NFPA), otherwise the body's catalog search, plus ANSI Webstore search. Links only; standard text is copyrighted.",
+    inputSchema: { type: "object", properties: { body: { type: "string", enum: Object.keys(BODIES) }, number: { type: "string", minLength: 1, description: 'e.g. "61010-1", "C63.4-2014", "E308-22"' }, edition: { type: "string" }, check: { type: "boolean", default: true } }, required: ["body", "number"] },
+  },
   { name: "regulatory_status", description: "Show which data sources are reachable.", inputSchema: { type: "object", properties: {} } },
 ];
 
@@ -46,6 +57,8 @@ const HANDLERS = {
   ecfr_get_section: async (a) => (await ecfrGetSection(a)) || { error: `No current text found for ${a.title} CFR ${a.section}.` },
   federal_register_search: federalRegisterSearch,
   fcc_grantee_lookup: fccGranteeLookup,
+  ibr_standards: ibrStandards,
+  standards_link: standardsLink,
   regulatory_status: status,
 };
 
