@@ -59,6 +59,7 @@ Install **US Regulatory Research** from the Grok Bot or Cursor plugin marketplac
 - **FCC grantees** come from the FCC Open Data portal dataset "EAS Equipment Authorization Grantee Registrations". The FCC last refreshed it on 2021-03-22, so newer grantees won't appear. It lists companies, not individual FCC ID grants. The FCC's own Equipment Authorization System (apps.fcc.gov/oetcf/eas) blocks automated access, so this plugin can't confirm a grant. Each result links there so you can check by hand. Contact names in the dataset are left out.
 - Requests time out after 20 s (`US_REGULATORY_TIMEOUT_MS` changes this). A rate-limited source (HTTP 429) returns a clear message.
 - Not legal advice. For equipment authorization questions, confirm with a test lab or TCB.
+- IBR sections are found by heading ("Incorporation by reference", "Materials incorporated by reference", "Incorporations by reference", "Reference material") or by passing the section itself. Both the usual "IBR approved for §" wording and 49 CFR's ", into §§" wording are parsed, as are (i)/(ii) sub-items. Entries approved for an appendix rather than a numbered section keep that text in `approvedForText` with an empty `approvedFor` list.
 
 ## Development
 

@@ -33,6 +33,10 @@ export function splitDesignation(id) {
   return { number: s, edition: null };
 }
 
+// Most titles say "IBR approved for § ..."; 49 CFR 171.7 says ", into §§ ...".
+const MARK = /IBR approved for|,?\s+into\s+§/i;
+const MARK_SRC = "(?:;\\s*IBR approved|,?\\s+into\\s+§)";
+
 // Parse an eCFR IBR section (XML) into publishers and their standards.
 export function parseIbr(xml) {
   const paras = [...String(xml).matchAll(/<P>([\s\S]*?)<\/P>/g)].map((m) => m[1]);
@@ -41,20 +45,24 @@ export function parseIbr(xml) {
   for (const raw of paras) {
     const text = clean(raw);
     const letter = text.match(/^\(([a-z])\)\s+(.*)$/);
-    const num = text.match(/^\((\d+)\)\s+(.*)$/);
-    if (letter) {
+    let num = text.match(/^\((\d+)\)\s+(.*)$/);
+    // "(i)", "(ii)" sub-items that list a standard (40 CFR 60.17) belong to the current publisher.
+    const roman = text.match(/^\(([ivx]+)\)\s+(.*)$/);
+    const romanItem = Boolean(roman && cur && cur.standards.length && MARK.test(text));
+    if (romanItem) num = roman;
+    if (letter && !romanItem) {
       const rest = letter[2];
-      if (/resellers?/i.test(rest) && !/IBR approved/i.test(rest)) { cur = null; continue; } // reseller list, not a publisher
+      if (/resellers?/i.test(rest) && !MARK.test(rest)) { cur = null; continue; } // reseller list, not a publisher
       const name = (rest.match(/^(.*?)(?:,\s*(?:\d|P\.\s?O\.|c\/o|Attn)|;\s*phone|;\s*website|,\s*phone)/i) || [null, rest.slice(0, 120)])[1].trim();
       const site = (raw.match(/website:\s*<I>\s*([^<]+?)\s*<\/I>/i) || [])[1];
       cur = { letter: letter[1], publisher: name, bodyKey: bodyKeyFor(name), website: site ? site.replace(/[.;,]+$/, "") : null, standards: [] };
       publishers.push(cur);
-    } else if (num && cur && /IBR approved for/i.test(text)) {
+    } else if (num && cur && MARK.test(text)) {
       let titleM = raw.match(/<I>([\s\S]*?)<\/I>/);
       if (titleM && /^\s*(https?:|www\.)/i.test(titleM[1])) titleM = null; // italic URL, not a title
       let before, after, plainTitle = null;
       if (titleM) {
-        before = clean(raw.slice(0, titleM.index)).replace(/^\(\d+\)\s*/, "");
+        before = clean(raw.slice(0, titleM.index)).replace(/^\((?:\d+|[ivx]+)\)\s*/, "");
         after = clean(raw.slice(titleM.index + titleM[0].length));
       } else {
         // No italic title: "SCTE 28 2003 (formerly DVS 295): “Host-POD Interface Standard,” 2003; IBR ..." or "ETSI EN 300 422-1 V2.2.1 (2021-11), Title; Part 1, published ...; IBR ..."
@@ -62,14 +70,14 @@ export function parseIbr(xml) {
         const q = body.match(/^(.*?)[:,]\s*[“"](.+?)[,]?[”"],?\s*(.*)$/);
         if (q) { before = q[1]; plainTitle = q[2]; after = q[3]; }
         else {
-          const c = body.match(/^(.*?(?:\([^)]*\))?),\s*(.*?)(?:,\s*((?:published|approved|dated)?[^,;]*?(?:19|20)\d{2}[^;]*));\s*IBR approved/i);
+          const c = body.match(new RegExp(`^(.*?(?:\\([^)]*\\))?),\\s*(.*?)(?:,\\s*((?:published|approved|dated)?[^,;]*?(?:19|20)\\d{2}[^;]*?))${MARK_SRC}`, "i"));
           if (c) { before = c[1]; plainTitle = c[2]; after = `${c[3] || ""}; IBR approved`; }
           else { before = body.split(/[,;]/)[0]; after = body.slice(before.length); }
         }
       }
       before = before.replace(/[,:]\s*$/, "").trim();
-      const dateText = ((after.match(/^,?\s*(.*?);\s*IBR approved/i) || [])[1] || "").trim() || null;
-      const approved = ((text.match(/IBR approved for\s+([^.]*(?:\.\d+[^.]*)*)/i) || [])[1] || "").replace(/\s*\(Available at.*$/i, "").trim();
+      const dateText = ((after.match(new RegExp(`^,?\\s*(.*?)${MARK_SRC}`, "i")) || [])[1] || "").trim() || null;
+      const approved = ((text.match(/(?:IBR approved for|\binto)\s+(§[^.]*(?:\.\d+[^.]*)*|[^.]*(?:\.\d+[^.]*)*)/i) || [])[1] || "").replace(/\s*\(Available at.*$/i, "").trim();
       const sections = [...approved.matchAll(/(\d+[A-Za-z]?\.\d+[A-Za-z0-9-]*)(\([a-z0-9]+\))*/g)].map((m) => m[0]);
       const { number, edition } = splitDesignation(before);
       cur.standards.push({
@@ -87,11 +95,24 @@ export function parseIbr(xml) {
   return publishers.filter((p) => p.standards.length);
 }
 
+// IBR section headings vary: "Incorporation by reference" (47 CFR 15.38), "Incorporations by reference" (40 CFR 60.17),
+// "Materials incorporated by reference" (10 CFR 430.3), "Reference material" (49 CFR 171.7).
+const IBR_HEADING = /incorporat\w* by reference|reference materials?\b/i;
 async function findIbrSection(title, part) {
-  const q = new URLSearchParams({ query: "incorporation by reference", per_page: "20", date: "current", "hierarchy[title]": String(title), "hierarchy[part]": String(part) });
-  const d = await json("eCFR", `${ECFR}/search/v1/results?${q}`);
-  const hit = (d?.results || []).find((r) => r.hierarchy?.section && String(r.hierarchy.part) === String(part) && /incorporation by reference/i.test(clean(r.headings?.section || "")));
-  return hit?.hierarchy?.section || null;
+  for (const query of ["incorporation by reference", "incorporated by reference", "reference material"]) {
+    const q = new URLSearchParams({ query, per_page: "20", date: "current", "hierarchy[title]": String(title), "hierarchy[part]": String(part) });
+    const d = await json("eCFR", `${ECFR}/search/v1/results?${q}`);
+    const hit = (d?.results || []).find((r) => r.hierarchy?.section && String(r.hierarchy.part) === String(part) && IBR_HEADING.test(clean(r.headings?.section || "")));
+    if (hit) return hit.hierarchy.section;
+  }
+  return null;
+}
+
+async function sectionXml(title, part, section, asOf) {
+  const res = await request("eCFR", `${ECFR}/versioner/v1/full/${asOf}/title-${title}.xml?part=${encodeURIComponent(part)}&section=${encodeURIComponent(section)}`, { headers: { "Accept-Encoding": "gzip" } });
+  if (res.status === 404 || res.status === 400) return null;
+  if (!res.ok) throw new Error(`eCFR HTTP ${res.status}`);
+  return res.text();
 }
 
 export async function ibrStandards({ title, part, section } = {}) {
@@ -100,12 +121,15 @@ export async function ibrStandards({ title, part, section } = {}) {
   if (sec && !/^\d+[A-Za-z]?\.\d+[A-Za-z0-9-]*$/.test(sec)) throw new Error('section must look like "15.38" or "15.31".');
   part = part != null && part !== "" ? String(part).trim() : sec ? sec.split(".")[0] : null;
   if (!part) throw new Error("Give part (e.g. 15) or section (e.g. 15.38).");
-  const ibrSection = await findIbrSection(title, part);
-  if (!ibrSection) return { citation: `${title} CFR Part ${part}`, ibrSection: null, publishers: [], note: `No "Incorporation by reference" section found for ${title} CFR Part ${part}. The part may cite standards inside individual sections, or have none.`, copyright: COPYRIGHT };
   const asOf = await latestDate(title);
-  const res = await request("eCFR", `${ECFR}/versioner/v1/full/${asOf}/title-${title}.xml?part=${encodeURIComponent(part)}&section=${encodeURIComponent(ibrSection)}`, { headers: { "Accept-Encoding": "gzip" } });
-  if (!res.ok) throw new Error(`eCFR HTTP ${res.status}`);
-  let publishers = parseIbr(await res.text());
+  // A section that itself lists IBR material is the IBR section (works even when its heading is unusual).
+  let ibrSection = null, xml = null;
+  if (sec) { const x = await sectionXml(title, part, sec, asOf); if (x && (IBR_HEADING.test(clean((x.match(/<HEAD>([\s\S]*?)<\/HEAD>/) || [])[1] || "")) || parseIbr(x).reduce((n, p) => n + p.standards.length, 0) >= 3)) { ibrSection = sec; xml = x; } }
+  if (!ibrSection) ibrSection = await findIbrSection(title, part);
+  if (!ibrSection) return { citation: `${title} CFR Part ${part}`, ibrSection: null, publishers: [], note: `No "Incorporation by reference" section found for ${title} CFR Part ${part}. The part may cite standards inside individual sections, or have none.`, copyright: COPYRIGHT };
+  if (!xml) xml = await sectionXml(title, part, ibrSection, asOf);
+  if (!xml) throw new Error(`eCFR returned no text for ${title} CFR ${ibrSection}.`);
+  let publishers = parseIbr(xml);
   const filtered = sec && sec !== ibrSection;
   if (filtered) publishers = publishers.map((p) => ({ ...p, standards: p.standards.filter((s) => s.approvedFor.some((a) => a === sec || a.startsWith(`${sec}(`))) })).filter((p) => p.standards.length);
   const count = publishers.reduce((n, p) => n + p.standards.length, 0);

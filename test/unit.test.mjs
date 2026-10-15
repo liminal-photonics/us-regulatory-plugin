@@ -146,6 +146,7 @@ test("ibr_standards filters by section and reports parts without an IBR section"
     const url = decodeURIComponent(String(u));
     if (url.includes("/search/v1/results")) return url.includes("hierarchy[part]=68") ? ok({ results: [] }) : ok({ results: [{ hierarchy: { title: "47", part: "15", section: "15.38" }, headings: { section: "<strong>Incorporation by reference</strong>." } }] });
     if (url.includes("titles.json")) return ok({ titles: [{ number: 47, up_to_date_as_of: "2026-10-13" }] });
+    if (url.includes("section=15.31")) return ok("<DIV8><HEAD>§ 15.31 Measurement standards.</HEAD><P>(a) The following measurement procedures are incorporated by reference into § 15.38.</P></DIV8>");
     return ok(IBR_XML);
   });
   try {
@@ -184,4 +185,19 @@ test("standards_link builds links; product pages are dropped when missing and fl
   assert.deepEqual(iec.links.map((l) => l.url), ["https://webstore.iec.ch/en/products/?q=IEC%2061000-4-2", "https://webstore.ansi.org/search/find?in=1&st=IEC%2061000-4-2%3A2008"]);
   const ieee = await standardsLink({ body: "ieee", number: "802.15.4", check: false });
   assert.equal(ieee.links[0].kind, "catalog search");
+});
+
+test("IBR parsing handles 49 CFR 'into §§' wording and roman-numeral sub-items", () => {
+  const x = `<P>(c) The Aluminum Association, 1525 Wilson Blvd., Arlington, VA 22209.</P>
+<P>(1) Aluminum Standards and Data, Seventh Edition, June 1982, into §§ 172.102; 178.65.</P>
+<P>(d) U.S. Environmental Protection Agency, 1200 Pennsylvania Ave NW, Washington, DC.</P>
+<P>(1) <I>Method 1,</I> 2014; IBR approved for § 60.4.</P>
+<P>(i) SW-846-6010D, Inductively Coupled Plasma-Optical Emission Spectrometry, Revision 5, July 2018; IBR approved for appendix A-5 to this part.</P>
+<P>(ii) SW-846-6020B, Inductively Coupled Plasma-Mass Spectrometry, Revision 2, July 2014; IBR approved for appendix A-5 to this part.</P>`;
+  const p = parseIbr(x);
+  assert.equal(p.length, 2);
+  assert.deepEqual(p[0].standards[0].approvedFor, ["172.102", "178.65"]);
+  assert.equal(p[1].standards.length, 3);
+  assert.equal(p[1].standards[2].designation, "SW-846-6020B");
+  assert.match(p[1].standards[2].approvedForText, /appendix A-5/);
 });
