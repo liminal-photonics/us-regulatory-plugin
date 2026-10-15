@@ -1,0 +1,15 @@
+{
+  "name": "us-regulatory-mcp",
+  "version": "0.1.0",
+  "description": "MCP server for US regulatory and trademark research: eCFR, Federal Register and USPTO trademarks.",
+  "type": "module",
+  "bin": { "us-regulatory-mcp": "src/index.js" },
+  "main": "src/index.js",
+  "files": ["src/"],
+  "scripts": { "start": "node src/index.js", "test": "node --test test/", "live": "node scripts/live-smoke.mjs" },
+  "engines": { "node": ">=18" },
+  "author": "Liminal Photonics",
+  "license": "MIT",
+  "repository": "https://github.com/liminal-photonics/us-regulatory-plugin",
+  "dependencies": { "@modelcontextprotocol/sdk": "^1.17.0" }
+}

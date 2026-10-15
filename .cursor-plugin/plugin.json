@@ -1,0 +1,18 @@
+{
+  "name": "us-regulatory",
+  "displayName": "US Regulatory & Trademark Research",
+  "version": "0.1.0",
+  "description": "Look up US federal regulations (eCFR), track rule changes in the Federal Register, and run USPTO trademark knockout searches and TSDR status checks. eCFR, Federal Register and trademark search need no key.",
+  "author": {
+    "name": "Liminal Photonics"
+  },
+  "homepage": "https://github.com/liminal-photonics/us-regulatory-plugin",
+  "repository": "https://github.com/liminal-photonics/us-regulatory-plugin",
+  "license": "MIT",
+  "logo": "assets/logo.svg",
+  "keywords": ["regulations", "ecfr", "cfr", "federal-register", "fcc", "part-15", "uspto", "trademark", "tsdr", "compliance", "mcp"],
+  "category": "developer-tools",
+  "tags": ["regulatory", "compliance", "trademark", "mcp"],
+  "skills": "./skills/",
+  "mcpServers": "./mcp.json"
+}

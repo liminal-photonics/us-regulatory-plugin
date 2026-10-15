@@ -1,0 +1,12 @@
+{
+  "mcpServers": {
+    "us-regulatory": {
+      "type": "stdio",
+      "command": "npx",
+      "args": ["-y", "github:liminal-photonics/us-regulatory-plugin"],
+      "env": {
+        "USPTO_TSDR_API_KEY": "${env:USPTO_TSDR_API_KEY}"
+      }
+    }
+  }
+}

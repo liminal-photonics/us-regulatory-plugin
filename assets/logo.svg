@@ -1,0 +1,12 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="512" height="512" viewBox="0 0 512 512">
+  <rect width="512" height="512" rx="96" fill="#1F2A44"/>
+  <!-- document -->
+  <path d="M150 96h160l72 72v248a20 20 0 0 1-20 20H150a20 20 0 0 1-20-20V116a20 20 0 0 1 20-20z" fill="#F4F1E8"/>
+  <path d="M310 96v52a20 20 0 0 0 20 20h52z" fill="#C9C2AE"/>
+  <!-- section sign -->
+  <text x="200" y="300" font-family="Georgia, 'Times New Roman', serif" font-size="190" font-weight="700" fill="#1F2A44" text-anchor="middle">§</text>
+  <!-- seal -->
+  <circle cx="330" cy="356" r="58" fill="#C8102E"/>
+  <circle cx="330" cy="356" r="42" fill="none" stroke="#F4F1E8" stroke-width="8"/>
+  <path d="M308 356l16 16 30-32" fill="none" stroke="#F4F1E8" stroke-width="12" stroke-linecap="round" stroke-linejoin="round"/>
+</svg>
