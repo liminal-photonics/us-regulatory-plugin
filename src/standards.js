@@ -152,7 +152,7 @@ export const BODIES = {
     deep: (n) => ({ url: `https://www.shopulstandards.com/ProductDetail.aspx?productId=UL${enc(n.replace(/^UL\s*/i, "").replace(/\s+/g, ""))}`, expect: new RegExp(`UL ${n.replace(/^UL\s*/i, "").replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}\\b`, "i") }) },
   ansi: { name: "ANSI Webstore", prefix: "", search: ansiSearch },
   astm: { name: "ASTM International", prefix: "ASTM", search: (q) => ansiSearch(q),
-    deep: (n) => { const code = n.replace(/^ASTM\s*/i, "").replace(/-\d{2,4}[a-z]?$/i, "").replace(/\s+/g, "").toLowerCase(); return /^[a-g]\d+/.test(code) ? { url: `https://www.astm.org/standards/${enc(code)}`, expect: new RegExp(code, "i") } : null; } },
+    deep: (n) => { const code = n.replace(/^ASTM\s*/i, "").replace(/-\d{2,4}[a-z]?$/i, "").replace(/\s+/g, "").toLowerCase(); return /^[a-g]\d+[a-z0-9.-]*$/.test(code) ? { url: `https://www.astm.org/standards/${enc(code)}`, expect: new RegExp(code.replace(/[.*+?^${}()|[\]\\]/g, "\\$&"), "i") } : null; } },
   ieee: { name: "IEEE Standards Association", prefix: "IEEE", search: (q) => `https://standards.ieee.org/search/?q=${enc(q)}`,
     deep: (n, ed) => { const num = n.replace(/^IEEE\s*(Std\.?)?\s*/i, "").trim(); return /^\d+[A-Za-z]?$/.test(num) ? { url: `https://standards.ieee.org/standard/${num}${ed && /^\d{4}$/.test(ed) ? `-${ed}` : ""}.html`, expect: new RegExp(num) } : null; } },
   nfpa: { name: "NFPA", prefix: "NFPA", search: (q) => `https://www.nfpa.org/search?q=${enc(q)}`,

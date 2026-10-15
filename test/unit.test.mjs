@@ -201,3 +201,15 @@ test("IBR parsing handles 49 CFR 'into §§' wording and roman-numeral sub-items
   assert.equal(p[1].standards[2].designation, "SW-846-6020B");
   assert.match(p[1].standards[2].approvedForText, /appendix A-5/);
 });
+
+test("edge cases: regex-special ASTM numbers, LIKE wildcards, bad dates and parts, hex entities", async () => {
+  const r = await standardsLink({ body: "ASTM", number: "E308(", check: false });
+  assert.ok(r.links.length >= 1);
+  assert.equal(xmlToText("<P>&#xB5;W/cm&#178;</P>"), "µW/cm²");
+  await assert.rejects(ecfrGetSection({ title: 47, section: "15.109", date: "2026-02-30" }), /real date/);
+  await assert.rejects(ecfrGetSection({ title: 47, section: "15.109", date: "2026-13-45" }), /real date/);
+  await assert.rejects(ecfrSearch({ query: "laser", title: 21, part: "1040; x" }), /part must be/);
+  await assert.rejects(federalRegisterSearch({ term: "laser", from: "2026-05-01", to: "2026-01-01" }), /on or before/);
+  await assert.rejects(federalRegisterSearch({ cfrTitle: 47, cfrPart: "15 OR 1" }), /cfrPart/);
+  await assert.rejects(fccGranteeLookup({ name: "%%%" }), /Give fccId/);
+});

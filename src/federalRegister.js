@@ -28,7 +28,9 @@ export async function federalRegisterSearch({ term, agencies, types, cfrTitle, c
   const ag = Array.isArray(agencies) ? agencies.filter(Boolean) : agencies ? [agencies] : [];
   if (!t && !ag.length && !cfrTitle) throw new Error("Give at least one of term, agencies or cfrTitle.");
   for (const d of [from, to]) if (d && !DATE.test(d)) throw new Error("Dates must be YYYY-MM-DD.");
+  if (from && to && from > to) throw new Error("from must be on or before to.");
   if (cfrPart && !cfrTitle) throw new Error("cfrPart needs cfrTitle.");
+  if (cfrPart && !/^\d+[A-Za-z]?$/.test(String(cfrPart).trim())) throw new Error('cfrPart must be a part number like "15".');
   const q = new URLSearchParams({ per_page: String(clampLimit(limit, 10, 100)), order: "newest" });
   for (const f of FIELDS) q.append("fields[]", f);
   if (t) q.set("conditions[term]", t);

@@ -19,7 +19,7 @@ export async function ecfrSearch({ query, title, part, limit } = {}) {
   query = requireText(query, "query");
   const q = new URLSearchParams({ query, per_page: String(clampLimit(limit, 10, 50)), date: "current" });
   if (title != null && title !== "") q.set("hierarchy[title]", String(requireInt(title, "title", 1, 50)));
-  if (part != null && part !== "") q.set("hierarchy[part]", String(part));
+  if (part != null && part !== "") { if (!/^\d+[A-Za-z]?$/.test(String(part).trim())) throw new Error('part must be a part number like "15".'); q.set("hierarchy[part]", String(part).trim()); }
   const d = await json("eCFR", `${BASE}/search/v1/results?${q}`);
   return { query, total: d?.meta?.total_count ?? 0, results: (d?.results || []).map(normalizeSearchResult) };
 }
@@ -38,17 +38,21 @@ export function xmlToText(xml) {
   s = s.replace(/<TR[^>]*>/gi, "\n").replace(/<\/T[HD]>\s*<T[HD][^>]*>/gi, " | ");
   s = s.replace(/<(HEAD|P|FP|TR|CITA|DIV\d?|NOTE|EXTRACT)[^>]*>/gi, "\n").replace(/<\/(HEAD|P|FP|TABLE|CITA|NOTE)>/gi, "\n");
   s = s.replace(/<[^>]+>/g, "");
-  s = s.replace(/&amp;/g, "&").replace(/&lt;/g, "<").replace(/&gt;/g, ">").replace(/&quot;/g, '"').replace(/&#(\d+);/g, (_, n) => String.fromCharCode(n));
+  s = s.replace(/&amp;/g, "&").replace(/&lt;/g, "<").replace(/&gt;/g, ">").replace(/&quot;/g, '"').replace(/&#x([0-9a-f]+);/gi, (_, n) => String.fromCodePoint(parseInt(n, 16))).replace(/&#(\d+);/g, (_, n) => String.fromCodePoint(Number(n)));
   return s.split("\n").map((l) => l.replace(/[ \t]+/g, " ").trim()).filter(Boolean).join("\n");
 }
 
+const realDate = (d) => { const t = Date.parse(`${d}T00:00:00Z`); return Number.isFinite(t) && new Date(t).toISOString().slice(0, 10) === d; };
+
 export async function ecfrGetSection({ title, section, date } = {}) {
   title = String(requireInt(title, "title", 1, 50));
-  if (date != null && date !== "" && !/^\d{4}-\d{2}-\d{2}$/.test(String(date))) throw new Error("date must be YYYY-MM-DD.");
+  if (date != null && date !== "" && (!/^\d{4}-\d{2}-\d{2}$/.test(String(date)) || !realDate(String(date)))) throw new Error("date must be a real date as YYYY-MM-DD.");
   section = requireText(section, "section").replace(/^§\s*/, "");
   if (!/^\d+[A-Za-z]?\.\d+[A-Za-z0-9-]*$/.test(section)) throw new Error('section must look like "15.109" (part.section).');
   const part = section.split(".")[0];
-  const asOf = date ? String(date) : await latestDate(title);
+  const latest = await latestDate(title);
+  if (date && String(date) > latest) throw new Error(`eCFR title ${title} is only published up to ${latest}; use that date or earlier.`);
+  const asOf = date ? String(date) : latest;
   const res = await request("eCFR", `${BASE}/versioner/v1/full/${asOf}/title-${title}.xml?part=${encodeURIComponent(part)}&section=${encodeURIComponent(section)}`, { headers: { "Accept-Encoding": "gzip" } });
   if (res.status === 404) return null;
   if (res.status === 400) throw new Error(`eCFR has no version of ${title} CFR ${section} for ${asOf} (the date may be before the section existed or after the latest update).`);

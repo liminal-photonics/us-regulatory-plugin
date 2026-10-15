@@ -45,7 +45,8 @@ export async function fccGranteeLookup({ fccId, granteeCode, name, limit } = {})
   let code = granteeCode ? String(granteeCode).toUpperCase().replace(/[^A-Z0-9]/g, "") : null;
   let productCode = null;
   if (fccId) ({ granteeCode: code, productCode } = splitFccId(fccId));
-  const nm = typeof name === "string" ? name.trim() : "";
+  // % and _ are wildcards in SoQL LIKE; drop them so "%%%" cannot match every grantee
+  const nm = typeof name === "string" ? name.replace(/[%_]/g, " ").replace(/\s+/g, " ").trim() : "";
   if (!code && !nm) throw new Error("Give fccId, granteeCode or name.");
   if (code && !/^([A-Z0-9]{3}|2[A-Z0-9]{4})$/.test(code)) throw new Error("granteeCode must be 3 characters, or 5 starting with 2.");
   if (nm && nm.length < 3) throw new Error("name must be at least 3 characters.");
