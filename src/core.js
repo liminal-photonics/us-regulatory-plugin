@@ -1,5 +1,4 @@
 import { ecfrStatus } from "./ecfr.js";
-import { tsdrConfigured } from "./uspto.js";
 
 export async function status() {
   let ecfr;
@@ -7,7 +6,6 @@ export async function status() {
   return {
     ecfr,
     federalRegister: "no key needed",
-    trademarkSearch: "no key needed (public USPTO Trademark Search endpoint)",
-    trademarkStatus: tsdrConfigured() ? "configured (USPTO_TSDR_API_KEY)" : "missing USPTO_TSDR_API_KEY; trademark_status is disabled",
+    fccGrantees: "no key needed (FCC Open Data grantee registry, frozen since March 2021; no FCC ID grant lookup)",
   };
 }

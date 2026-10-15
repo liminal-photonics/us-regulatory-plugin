@@ -4,7 +4,7 @@ import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js"
 import { CallToolRequestSchema, ListToolsRequestSchema } from "@modelcontextprotocol/sdk/types.js";
 import { ecfrSearch, ecfrGetSection } from "./ecfr.js";
 import { federalRegisterSearch } from "./federalRegister.js";
-import { trademarkSearch, trademarkStatus } from "./uspto.js";
+import { fccGranteeLookup } from "./fcc.js";
 import { status } from "./core.js";
 
 const TOOLS = [
@@ -34,24 +34,18 @@ const TOOLS = [
     },
   },
   {
-    name: "trademark_search",
-    description: "Knockout search of USPTO trademark records by word mark (exact, fuzzy and prefix). Live marks only by default; optional Nice classes. Not legal clearance.",
-    inputSchema: { type: "object", properties: { mark: { type: "string", minLength: 1 }, liveOnly: { type: "boolean", default: true }, classes: { type: "array", items: { type: "integer", minimum: 1, maximum: 45 } }, limit: { type: "integer", minimum: 1, maximum: 100, default: 20 } }, required: ["mark"] },
+    name: "fcc_grantee_lookup",
+    description: "Look up an FCC equipment authorization grantee by FCC ID (uses its grantee-code prefix), grantee code or company name, from the FCC Open Data grantee registry. That registry was last refreshed in March 2021 and does not show individual FCC ID grants; the result links to FCC EAS to confirm.",
+    inputSchema: { type: "object", properties: { fccId: { type: "string" }, granteeCode: { type: "string" }, name: { type: "string" }, limit: { type: "integer", minimum: 1, maximum: 50, default: 10 } } },
   },
-  {
-    name: "trademark_status",
-    description: "USPTO TSDR case status for one serial number: status, owner, classes, recent prosecution history. Needs USPTO_TSDR_API_KEY.",
-    inputSchema: { type: "object", properties: { serialNumber: { type: "string", minLength: 8 } }, required: ["serialNumber"] },
-  },
-  { name: "regulatory_status", description: "Show which data sources are reachable and which keys are configured.", inputSchema: { type: "object", properties: {} } },
+  { name: "regulatory_status", description: "Show which data sources are reachable.", inputSchema: { type: "object", properties: {} } },
 ];
 
 const HANDLERS = {
   ecfr_search: ecfrSearch,
   ecfr_get_section: async (a) => (await ecfrGetSection(a)) || { error: `No current text found for ${a.title} CFR ${a.section}.` },
   federal_register_search: federalRegisterSearch,
-  trademark_search: trademarkSearch,
-  trademark_status: trademarkStatus,
+  fcc_grantee_lookup: fccGranteeLookup,
   regulatory_status: status,
 };
 

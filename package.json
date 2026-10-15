@@ -1,7 +1,7 @@
 {
   "name": "us-regulatory-mcp",
   "version": "0.1.0",
-  "description": "MCP server for US regulatory and trademark research: eCFR, Federal Register and USPTO trademarks.",
+  "description": "MCP server for US regulatory research: eCFR, Federal Register and FCC equipment authorization grantees.",
   "type": "module",
   "bin": { "us-regulatory-mcp": "src/index.js" },
   "main": "src/index.js",

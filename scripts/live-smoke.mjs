@@ -21,16 +21,11 @@ await run(process.env, async (call, c) => {
   const f = await call("federal_register_search", { agencies: ["federal-communications-commission"], cfrTitle: 47, cfrPart: "15", types: ["rule", "proposed_rule"], from: "2026-01-01", limit: 3 });
   console.log("FR total", f.total); for (const d of f.results) console.log("  ", d.published, d.type, "|", d.title.slice(0, 90), "| comments", d.commentsClose, "| effective", d.effective);
   console.log("FR_BAD_AGENCY", JSON.stringify(await call("federal_register_search", { agencies: ["not-an-agency"] })));
-  const t = await call("trademark_search", { mark: "lumen", classes: [9], limit: 3 });
-  console.log("TM_SEARCH total", t.total); for (const m of t.results) console.log("  ", m.serialNumber, m.mark, "|", m.status, "|", m.owner, "|", m.classes.join(","));
-  const st = await call("trademark_status", { serialNumber: t.results[0]?.serialNumber || "97123456" });
-  console.log("TM_STATUS", st.serialNumber, st.mark, "|", st.statusSummary, "|", st.status, "| owners", (st.owners || []).map((o) => o.name).join("; "), st.error || "");
-  console.log("EMPTY_INPUT", JSON.stringify(await call("trademark_search", { mark: " " })));
-});
-const env2 = { ...process.env }; delete env2.USPTO_TSDR_API_KEY;
-await run(env2, async (call) => {
-  console.log("NOKEY STATUS", JSON.stringify((await call("regulatory_status", {})).trademarkStatus));
-  console.log("NOKEY TM_STATUS", JSON.stringify(await call("trademark_status", { serialNumber: "97123456" })).slice(0, 200));
-  const t = await call("trademark_search", { mark: "lumen", limit: 1 });
-  console.log("NOKEY TM_SEARCH still works:", t.results.length, "result");
+  const fg = await call("fcc_grantee_lookup", { fccId: "2AC7Z-ESPWROOM32" });
+  console.log("FCC_GRANTEE", JSON.stringify(fg.results), "| dataset updated", fg.datasetUpdated);
+  const gn = await call("fcc_grantee_lookup", { name: "nordic semiconductor" });
+  console.log("FCC_BY_NAME", gn.results.map((r) => `${r.granteeCode} ${r.granteeName}`).join("; "));
+  const gx = await call("fcc_grantee_lookup", { fccId: "2BZZZ-NOTREAL" });
+  console.log("FCC_UNKNOWN results", gx.results.length);
+  console.log("EMPTY_INPUT", JSON.stringify(await call("ecfr_search", { query: " " })));
 });
