@@ -14,6 +14,12 @@ before(async () => {
   mock = http.createServer((req, res) => {
     fccQueries.push(decodeURIComponent(req.url));
     res.writeHead(200, { "Content-Type": "application/json" });
+    if (req.url.startsWith("/ecfr/versioner/v1/titles")) return res.end(JSON.stringify({ titles: [{ number: 33, up_to_date_as_of: "2026-10-01" }] }));
+    if (req.url.startsWith("/ecfr/versioner/v1/full/")) {
+      if (req.url.includes("section=183.5")) return res.end("<DIV8><HEAD>§ 183.5 Incorporation by reference.</HEAD><P>(a) Certain material is incorporated by reference into this part. The material is listed in § 183.607.</P></DIV8>");
+      return res.end("<DIV8><HEAD>§ 183.607 Incorporation by reference.</HEAD><P>(a) The following standards are incorporated by reference.</P><P>(1) UL 1128, Marine Blowers.</P><P>(2) SAE J1171, External Ignition Protection.</P><P>(3) SAE J1527, Marine Fuel Hoses.</P></DIV8>");
+    }
+    if (req.url.startsWith("/ecfr/search") && req.url.includes("part%5D=183")) return res.end(JSON.stringify({ results: ["183.5", "183.607"].map((section) => ({ hierarchy: { part: "183", section }, headings: { section: "Incorporation by reference." } })) }));
     if (req.url.startsWith("/ecfr/search")) return res.end(JSON.stringify({ results: [], meta: { total_count: 0 } }));
     if (req.url.startsWith("/fr/")) return res.end(JSON.stringify({ count: 0, results: [] }));
     res.end(req.url.includes("/api/views/") ? JSON.stringify({ rowsUpdatedAt: 1616371200 }) : JSON.stringify([{ grantee_code: "BCG", grantee_name: "Apple Inc." }]));
@@ -76,4 +82,16 @@ test("MCP federal_register_search: a term search is ordered by relevance by defa
   assert.ok(fccQueries.some((q) => q.includes("order=relevance")));
   const bad = await call("federal_register_search", { term: "x", order: "random" });
   assert.equal(bad.isError, true);
+});
+
+test("MCP ibr_standards: for a whole part, the IBR section that has entries is shown, not an empty pointer section", async () => {
+  const r = JSON.parse((await call("ibr_standards", { title: 33, part: "183" })).text);
+  assert.equal(r.ibrSection, "33 CFR 183.607");
+  assert.equal(r.count, 3);
+  assert.deepEqual(r.otherIbrSections, ["33 CFR 183.5"]);
+});
+
+test("IBR parser: publisher names stop before postal and phone details", () => {
+  const xml = `<P>(a) International Organization for Standardization, Case postale 56, CH·1211, Geneve 20, Switzerland, telephone +41-22-749-0111.</P><P>(1) ISO/IEC 27001:2013, Information security, IBR approved for § 170.599.</P>`;
+  assert.equal(parseIbr(xml)[0].publisher, "International Organization for Standardization");
 });

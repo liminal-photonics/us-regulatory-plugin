@@ -65,7 +65,7 @@ export function parseIbr(xml, lenient = false) {
     if (letter && !romanItem) {
       const rest = letter[2];
       if (/resellers?/i.test(rest) && !MARK.test(rest)) { cur = null; continue; } // reseller list, not a publisher
-      const name = (rest.match(/^(.*?)(?:,\s*(?:\d|P\.\s?O\.|c\/o|Attn)|;\s*phone|;\s*website|,\s*phone)/i) || [null, rest.slice(0, 120)])[1].trim();
+      const name = (rest.match(/^(.*?)(?:,\s*(?:\d|P\.\s?O\.|c\/o|Attn|Case postale|telephone|tel\b|fax\b)|;\s*phone|;\s*website|,\s*phone)/i) || [null, rest.slice(0, 120)])[1].trim();
       const site = (raw.match(/website:\s*<I>\s*([^<]+?)\s*<\/I>/i) || [])[1];
       cur = { letter: letter[1], publisher: /^(the following|certain|copies|material|all approved)/i.test(name) ? null : name, bodyKey: bodyKeyFor(name), website: site ? site.replace(/[.;,]+$/, "") : null, standards: [] };
       publishers.push(cur);
@@ -140,7 +140,21 @@ export async function ibrStandards({ title, part, section } = {}) {
   let ibrSection = null, xml = null;
   if (sec) { const x = await sectionXml(title, part, sec, asOf); if (x && (IBR_HEADING.test(clean((x.match(/<HEAD>([\s\S]*?)<\/HEAD>/) || [])[1] || "")) || parseIbr(x).reduce((n, p) => n + p.standards.length, 0) >= 3)) { ibrSection = sec; xml = x; } }
   let allIbr = [];
-  if (!ibrSection) { allIbr = await findIbrSection(title, part); ibrSection = allIbr[0] || null; }
+  if (!ibrSection) {
+    allIbr = await findIbrSection(title, part);
+    ibrSection = allIbr[0] || null;
+    // Some parts have a short pointer section ("listed in § 183.607") next to the real list: show the one with the most entries.
+    if (allIbr.length > 1) {
+      let best = -1;
+      for (const cand of allIbr.slice(0, 6)) {
+        const x = await sectionXml(title, part, cand, asOf).catch(() => null);
+        if (!x) continue;
+        const n = parseIbr(x).reduce((k, p) => k + p.standards.length, 0) || parseIbr(x, true).reduce((k, p) => k + p.standards.length, 0);
+        if (n > best) { best = n; ibrSection = cand; xml = x; }
+      }
+      allIbr = [ibrSection, ...allIbr.filter((x) => x !== ibrSection)];
+    }
+  }
   if (!ibrSection) return { citation: `${title} CFR Part ${part}`, ibrSection: null, publishers: [], note: `No "Incorporation by reference" section found for ${title} CFR Part ${part}. The part may cite standards inside individual sections, or have none.`, copyright: COPYRIGHT };
   if (!xml) xml = await sectionXml(title, part, ibrSection, asOf);
   if (!xml) throw new Error(`eCFR returned no text for ${title} CFR ${ibrSection}.`);
