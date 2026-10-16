@@ -23,7 +23,7 @@ export function normalizeDocument(d) {
   };
 }
 
-export async function federalRegisterSearch({ term, agencies, types, cfrTitle, cfrPart, from, to, limit } = {}) {
+export async function federalRegisterSearch({ term, agencies, types, cfrTitle, cfrPart, from, to, limit, order } = {}) {
   const t = typeof term === "string" ? term.trim() : "";
   const ag = Array.isArray(agencies) ? agencies.filter(Boolean) : agencies ? [agencies] : [];
   if (!t && !ag.length && !cfrTitle) throw new Error("Give at least one of term, agencies or cfrTitle.");
@@ -34,7 +34,11 @@ export async function federalRegisterSearch({ term, agencies, types, cfrTitle, c
   if (cfrPart && !/^\d+[A-Za-z]?$/.test(String(cfrPart).trim())) throw new Error('cfrPart must be a part number like "15".');
   const lim = clampLimit(limit, 10, 100);
   // The Federal Register API treats per_page=1 as its default (20), so ask for at least 2 and trim.
-  const q = new URLSearchParams({ per_page: String(Math.max(2, lim)), order: "newest" });
+  // With a search term, newest-first put unrelated documents first (a fee rule for "unlicensed devices", a TSCA rule for
+  // "lithium batteries"), so a term search defaults to relevance. Without a term, newest first.
+  const ord = order == null || order === "" ? (t ? "relevance" : "newest") : String(order).toLowerCase();
+  if (!["relevance", "newest", "oldest"].includes(ord)) throw new Error("order must be relevance, newest or oldest.");
+  const q = new URLSearchParams({ per_page: String(Math.max(2, lim)), order: ord });
   for (const f of FIELDS) q.append("fields[]", f);
   if (t) q.set("conditions[term]", t);
   for (const a of ag) q.append("conditions[agencies][]", String(a).trim().toLowerCase().replace(/\s+/g, "-"));
@@ -55,5 +59,5 @@ export async function federalRegisterSearch({ term, agencies, types, cfrTitle, c
     if (/HTTP 400/.test(e.message) && /agencies/.test(e.message)) throw new Error('Federal Register: unknown agency slug. Use slugs like "federal-communications-commission" or "patent-and-trademark-office".');
     throw e;
   }
-  return { description: d?.description || null, total: d?.count ?? 0, results: (d?.results || []).slice(0, lim).map(normalizeDocument) };
+  return { description: d?.description || null, order: ord, total: d?.count ?? 0, results: (d?.results || []).slice(0, lim).map(normalizeDocument) };
 }

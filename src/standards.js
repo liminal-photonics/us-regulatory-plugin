@@ -34,13 +34,15 @@ export function splitDesignation(id) {
 }
 
 // Most titles say "IBR approved for § ..."; 49 CFR 171.7 says ", into §§ ...".
-const MARK = /IBR approved for|,?\s+into\s+§/i;
-const MARK_SRC = "(?:;\\s*IBR approved|,?\\s+into\\s+§)";
+// 16 CFR 1243.8 says "; approved for §§ ...".
+const MARK_STRICT = /(?:IBR|incorporation by reference) approved for|;\s*approved for\s+§|,?\s+into\s+§/i;
+const MARK_SRC = "(?:[;,]\\s*(?:IBR|incorporation by reference) approved|;\\s*approved for\\s+§|,?\\s+into\\s+§)";
 
 const romanInt = (r) => { const v = { i: 1, v: 5, x: 10 }; let n = 0; for (let k = 0; k < r.length; k++) { const a = v[r[k]], b = v[r[k + 1]] || 0; n += a < b ? -a : a; } return n; };
 
 // Parse an eCFR IBR section (XML) into publishers and their standards.
-export function parseIbr(xml) {
+export function parseIbr(xml, lenient = false) {
+  const MARK = lenient ? /\S/ : MARK_STRICT;
   const paras = [...String(xml).matchAll(/<P>([\s\S]*?)<\/P>/g)].map((m) => m[1]);
   const publishers = [];
   let cur = null, prevRoman = 0;
@@ -65,9 +67,9 @@ export function parseIbr(xml) {
       if (/resellers?/i.test(rest) && !MARK.test(rest)) { cur = null; continue; } // reseller list, not a publisher
       const name = (rest.match(/^(.*?)(?:,\s*(?:\d|P\.\s?O\.|c\/o|Attn)|;\s*phone|;\s*website|,\s*phone)/i) || [null, rest.slice(0, 120)])[1].trim();
       const site = (raw.match(/website:\s*<I>\s*([^<]+?)\s*<\/I>/i) || [])[1];
-      cur = { letter: letter[1], publisher: name, bodyKey: bodyKeyFor(name), website: site ? site.replace(/[.;,]+$/, "") : null, standards: [] };
+      cur = { letter: letter[1], publisher: /^(the following|certain|copies|material|all approved)/i.test(name) ? null : name, bodyKey: bodyKeyFor(name), website: site ? site.replace(/[.;,]+$/, "") : null, standards: [] };
       publishers.push(cur);
-    } else if (num && cur && MARK.test(text)) {
+    } else if (num && cur && MARK.test(text) && !/^\(\d+\)\s*\[Reserved\]/i.test(text)) {
       let titleM = raw.match(/<I>([\s\S]*?)<\/I>/);
       if (titleM && /^\s*(https?:|www\.)/i.test(titleM[1])) titleM = null; // italic URL, not a title
       let before, after, plainTitle = null;
@@ -87,7 +89,7 @@ export function parseIbr(xml) {
       }
       before = before.replace(/[,:]\s*$/, "").trim();
       const dateText = ((after.match(new RegExp(`^,?\\s*(.*?)${MARK_SRC}`, "i")) || [])[1] || "").trim() || null;
-      const approved = ((text.match(/(?:IBR approved for|\binto)\s+(§[^.]*(?:\.\d+[^.]*)*|[^.]*(?:\.\d+[^.]*)*)/i) || [])[1] || "").replace(/\s*\(Available at.*$/i, "").trim();
+      const approved = ((text.match(/(?:approved for|\binto)\s+(§[^.]*(?:\.\d+[^.]*)*|[^.]*(?:\.\d+[^.]*)*)/i) || [])[1] || "").replace(/\s*\(Available at.*$/i, "").trim();
       const sections = [...approved.matchAll(/(\d+[A-Za-z]?\.\d+[A-Za-z0-9-]*)(\([a-z0-9]+\))*/g)].map((m) => m[0]);
       const { number, edition } = splitDesignation(before);
       cur.standards.push({
@@ -112,10 +114,12 @@ async function findIbrSection(title, part) {
   for (const query of ["incorporation by reference", "incorporated by reference", "reference material"]) {
     const q = new URLSearchParams({ query, per_page: "20", date: "current", "hierarchy[title]": String(title), "hierarchy[part]": String(part) });
     const d = await json("eCFR", `${ECFR}/search/v1/results?${q}`);
-    const hit = (d?.results || []).find((r) => r.hierarchy?.section && String(r.hierarchy.part) === String(part) && IBR_HEADING.test(clean(r.headings?.section || "")));
-    if (hit) return hit.hierarchy.section;
+    const hits = (d?.results || []).filter((r) => r.hierarchy?.section && String(r.hierarchy.part) === String(part) && IBR_HEADING.test(clean(r.headings?.section || ""))).map((r) => r.hierarchy.section);
+    // Some parts have one IBR section per subpart (45 CFR 170.299 and 170.599; 49 CFR 572 per dummy): return them all.
+    const all = [...new Set(hits)].sort((a, b) => a.localeCompare(b, "en", { numeric: true }));
+    if (all.length) return all;
   }
-  return null;
+  return [];
 }
 
 async function sectionXml(title, part, section, asOf) {
@@ -135,11 +139,16 @@ export async function ibrStandards({ title, part, section } = {}) {
   // A section that itself lists IBR material is the IBR section (works even when its heading is unusual).
   let ibrSection = null, xml = null;
   if (sec) { const x = await sectionXml(title, part, sec, asOf); if (x && (IBR_HEADING.test(clean((x.match(/<HEAD>([\s\S]*?)<\/HEAD>/) || [])[1] || "")) || parseIbr(x).reduce((n, p) => n + p.standards.length, 0) >= 3)) { ibrSection = sec; xml = x; } }
-  if (!ibrSection) ibrSection = await findIbrSection(title, part);
+  let allIbr = [];
+  if (!ibrSection) { allIbr = await findIbrSection(title, part); ibrSection = allIbr[0] || null; }
   if (!ibrSection) return { citation: `${title} CFR Part ${part}`, ibrSection: null, publishers: [], note: `No "Incorporation by reference" section found for ${title} CFR Part ${part}. The part may cite standards inside individual sections, or have none.`, copyright: COPYRIGHT };
   if (!xml) xml = await sectionXml(title, part, ibrSection, asOf);
   if (!xml) throw new Error(`eCFR returned no text for ${title} CFR ${ibrSection}.`);
   let publishers = parseIbr(xml);
+  // Older IBR sections (9 CFR 92.7, 33 CFR 183.607) list standards without an "approved for" clause: count every
+  // numbered, non-reserved entry instead of reporting none.
+  let lenient = false;
+  if (!publishers.length) { publishers = parseIbr(xml, true); lenient = publishers.length > 0; }
   const filtered = sec && sec !== ibrSection;
   if (filtered) publishers = publishers.map((p) => ({ ...p, standards: p.standards.filter((s) => s.approvedFor.some((a) => a === sec || a.startsWith(`${sec}(`))) })).filter((p) => p.standards.length);
   const count = publishers.reduce((n, p) => n + p.standards.length, 0);
@@ -147,6 +156,8 @@ export async function ibrStandards({ title, part, section } = {}) {
     citation: `${title} CFR ${filtered ? sec : `Part ${part}`}`,
     ibrSection: `${title} CFR ${ibrSection}`, asOf, count, publishers,
     url: `https://www.ecfr.gov/current/title-${title}/section-${ibrSection}`,
+    ...(lenient ? { parseNote: "This IBR section does not say which sections each standard is approved for, so approvedFor is empty; read the section text." } : {}),
+    ...(allIbr.length > 1 ? { otherIbrSections: allIbr.slice(1).map((x) => `${title} CFR ${x}`), multipleNote: `${title} CFR Part ${part} has ${allIbr.length} IBR sections; this lists ${title} CFR ${ibrSection} only. Pass section (e.g. "${allIbr[1]}") for another one.` } : {}),
     note: filtered && !count ? `No IBR material in ${title} CFR ${ibrSection} is approved for § ${sec}.` : undefined,
     copyright: COPYRIGHT,
   };

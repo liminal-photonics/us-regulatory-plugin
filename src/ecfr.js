@@ -31,7 +31,10 @@ export async function ecfrSearch({ query, title, part, limit } = {}) {
   if (title != null && title !== "") q.set("hierarchy[title]", String(requireInt(title, "title", 1, 50)));
   if (part != null && part !== "") { part = cleanPart(part); if (!/^\d+[A-Za-z]?$/.test(String(part).trim())) throw new Error('part must be a part number like "15".'); q.set("hierarchy[part]", String(part).trim()); }
   const d = await json("eCFR", `${BASE}/search/v1/results?${q}`);
-  return { query, total: d?.meta?.total_count ?? 0, results: (d?.results || []).map(normalizeSearchResult) };
+  const total = d?.meta?.total_count ?? 0;
+  const out = { query, total, results: (d?.results || []).map(normalizeSearchResult) };
+  if (!total) out.hint = `No current section contains every word of "${query}". eCFR matches all words, and rules use their own wording (frequencies are usually written in MHz, e.g. "2400-2483.5 MHz" rather than "2.4 GHz"). Try fewer or different words${title != null && title !== "" ? ", or drop the title/part filter" : ""}.`;
+  return out;
 }
 
 export async function latestDate(title) {
@@ -60,6 +63,7 @@ export async function ecfrGetSection({ title, section, date } = {}) {
   section = cleanSection(requireText(section, "section"), title);
   if (!/^\d+[A-Za-z]?\.\d+[A-Za-z0-9-]*$/.test(section)) throw new Error('section must look like "15.109" (part.section).');
   const part = section.split(".")[0];
+  if (date && String(date) < "2017-01-03") throw new Error(`eCFR point-in-time text starts on 2017-01-03. For ${title} CFR ${section} as of ${date}, use the annual edition of the CFR on govinfo: https://www.govinfo.gov/app/collection/cfr`);
   const latest = await latestDate(title);
   if (date && String(date) > latest) throw new Error(`eCFR title ${title} is only published up to ${latest}; use that date or earlier.`);
   const asOf = date ? String(date) : latest;

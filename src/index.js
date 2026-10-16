@@ -11,12 +11,12 @@ import { status } from "./core.js";
 const TOOLS = [
   {
     name: "ecfr_search",
-    description: "Full-text search of the current Code of Federal Regulations (eCFR). Optional title/part filters, e.g. title 47 part 15 for FCC Part 15.",
+    description: "Full-text search of the current Code of Federal Regulations (eCFR); every word must appear in a section, so use few, regulation-style words. Optional title/part filters, e.g. title 47 part 15 for FCC Part 15.",
     inputSchema: { type: "object", properties: { query: { type: "string", minLength: 1 }, title: { type: "integer", minimum: 1, maximum: 50 }, part: { type: "string" }, limit: { type: "integer", minimum: 1, maximum: 50, default: 10 } }, required: ["query"] },
   },
   {
     name: "ecfr_get_section",
-    description: "Get the current text of one CFR section, e.g. title 47 section 15.109. Optional date (YYYY-MM-DD) for a past version.",
+    description: "Get the current text of one CFR section, e.g. title 47 section 15.109. Optional date (YYYY-MM-DD, 2017-01-03 or later) for a past version.",
     inputSchema: { type: "object", properties: { title: { type: "integer", minimum: 1, maximum: 50 }, section: { type: "string", minLength: 1, description: 'part.section, e.g. "15.109"' }, date: { type: "string" } }, required: ["title", "section"] },
   },
   {
@@ -28,6 +28,7 @@ const TOOLS = [
         term: { type: "string" },
         agencies: { type: "array", items: { type: "string" }, description: 'Agency slugs, e.g. "federal-communications-commission", "patent-and-trademark-office"' },
         types: { type: "array", items: { type: "string", enum: ["rule", "proposed_rule", "notice", "presidential_document"] } },
+        order: { type: "string", enum: ["relevance", "newest", "oldest"], description: "Default: relevance when a term is given, else newest." },
         cfrTitle: { type: "integer" }, cfrPart: { type: "string" },
         from: { type: "string", description: "YYYY-MM-DD" }, to: { type: "string", description: "YYYY-MM-DD" },
         limit: { type: "integer", minimum: 1, maximum: 100, default: 10 },
@@ -54,7 +55,7 @@ const TOOLS = [
 
 const HANDLERS = {
   ecfr_search: ecfrSearch,
-  ecfr_get_section: async (a) => (await ecfrGetSection(a)) || { error: `No current text found for ${a.title} CFR ${a.section}.` },
+  ecfr_get_section: async (a) => (await ecfrGetSection(a)) || { error: `No text found for ${a.title} CFR ${a.section}${a.date ? ` as of ${a.date}` : " in the current eCFR"}. Check the section number (it may be reserved, removed or not yet in effect); ecfr_search can find the right one.` },
   federal_register_search: federalRegisterSearch,
   fcc_grantee_lookup: fccGranteeLookup,
   ibr_standards: ibrStandards,

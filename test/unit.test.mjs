@@ -70,7 +70,7 @@ test("Federal Register document normalizes and query is built correctly", async 
 test("FCC ID splits into grantee and product codes", () => {
   assert.deepEqual(splitFccId("2AC7Z-ESPWROOM32"), { granteeCode: "2AC7Z", productCode: "ESPWROOM32" });
   assert.deepEqual(splitFccId("bcg-e3091a"), { granteeCode: "BCG", productCode: "E3091A" });
-  assert.throws(() => splitFccId("x"), /fccId must look like/);
+  assert.throws(() => splitFccId("x"), /fccId must be a full FCC ID/);
 });
 
 test("FCC grantee normalizes without contact names and the query is safe", async () => {

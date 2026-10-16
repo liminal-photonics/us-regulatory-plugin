@@ -7,14 +7,21 @@ const BASE = process.env.FCC_OPENDATA_BASE || "https://opendata.fcc.gov";
 const DATASET = "3b3k-34jp";
 const EAS_SEARCH = "https://apps.fcc.gov/oetcf/eas/reports/GenericSearch.cfm";
 
-// Grantee codes are 3 characters (assigned before 2013) or 5 characters starting with "2" (2013 on).
+// Grantee codes are 3 characters (assigned before 2013) or 5 characters starting with "2" (2013 on). An FCC ID is the
+// grantee code followed by a 1-14 character product code (letters, digits, dashes). A dash or space may separate the
+// two parts, but only at the grantee-code boundary.
+const FCC_ID_HELP = 'fccId must be a full FCC ID: a grantee code (3 characters, or 5 starting with "2") plus a product code, e.g. "2AC7Z-ESPWROOM32" or "BCG-E3091A". To look up only a grantee, use granteeCode.';
 export function splitFccId(fccId) {
-  const id = String(fccId || "").toUpperCase().replace(/[\s-]+/g, (m) => (m.includes("-") ? "-" : ""));
-  const clean = id.replace(/[^A-Z0-9-]/g, "");
-  if (!/^[A-Z0-9][A-Z0-9-]{3,}$/.test(clean)) throw new Error('fccId must look like "2AC7Z-ESPWROOM32" or "BCG-E3091A".');
-  const flat = clean.replace(/-/g, "");
-  const len = flat.startsWith("2") ? 5 : 3;
-  return { granteeCode: flat.slice(0, len), productCode: flat.slice(len) || null };
+  const raw = String(fccId ?? "").trim().toUpperCase();
+  if (!/^[A-Z0-9][A-Z0-9 -]*$/.test(raw)) throw new Error(FCC_ID_HELP);
+  const len = raw.startsWith("2") ? 5 : 3;
+  const grantee = raw.slice(0, len);
+  if (!/^[A-Z0-9]+$/.test(grantee) || grantee.length !== len) throw new Error(FCC_ID_HELP);
+  let rest = raw.slice(len);
+  if (/^[ -]/.test(rest)) rest = rest.replace(/^(?: +|-| *- *)/, "");
+  const product = rest.replace(/ /g, "");
+  if (!product || !/^[A-Z0-9][A-Z0-9-]*$/.test(product) || /--/.test(product) || product.endsWith("-") || product.length > 14) throw new Error(FCC_ID_HELP);
+  return { granteeCode: grantee, productCode: product };
 }
 
 export function normalizeGrantee(r) {
