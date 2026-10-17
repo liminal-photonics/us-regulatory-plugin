@@ -11,12 +11,12 @@ A Grok Bot / Cursor plugin for US federal regulatory research. It bundles a loca
 | Tool | What it does |
 | --- | --- |
 | `ecfr_search` | Full-text search of the current Code of Federal Regulations, with optional title/part filters |
-| `ecfr_get_section` | Current (or dated) text of one section, e.g. 47 CFR 15.109, tables included |
+| `ecfr_get_section` | Current (or dated) text of one section, e.g. 47 CFR 15.109, tables included; long sections are paged (`offset`, `nextOffset`) |
 | `federal_register_search` | Rules, proposed rules and notices by term, agency, CFR title/part and date; returns effective and comment-close dates |
 | `ibr_standards` | Standards incorporated by reference in a CFR part (from its eCFR IBR section, e.g. 47 CFR 15.38): publisher, number, edition, title, sections approved for; filter by section |
 | `standards_link` | Official purchase/info links for IEC, ISO, UL, ANSI, ASTM, IEEE, NFPA, CIE, IES and NEMA standards |
 | `fcc_grantee_lookup` | FCC equipment authorization grantee by FCC ID (grantee-code prefix), grantee code or company name |
-| `regulatory_status` | Shows which sources are reachable |
+| `regulatory_status` | Shows which sources are reachable, plus the plugin version and git commit |
 
 **Skills**
 
@@ -34,11 +34,18 @@ Install **US Regulatory Research** from the Grok Bot or Cursor plugin marketplac
   "mcpServers": {
     "us-regulatory": {
       "command": "npx",
-      "args": ["-y", "github:liminal-photonics/us-regulatory-plugin"]
+      "args": ["-y", "github:liminal-photonics/us-regulatory-plugin#v0.2.0"]
     }
   }
 }
 ```
+
+## Reliability fields (v0.2.0)
+
+- Every tool result carries `retrievedAt` (UTC, ISO 8601) and `plugin: { name, version, gitSha }`, so a saved result can be dated and traced to the exact build. Array results are wrapped as `{ result: [...] }`.
+- `regulatory_status` reports `pluginName`, `version`, `gitSha` and `gitShaSource` (the npm lockfile that installed the plugin, `PLUGIN_GIT_SHA`, or the git checkout).
+- Pin installs to a release tag (`#v0.2.0`) or a commit SHA, not the default branch, so an update can't change answers without notice. The tag is created on the merge commit; until it exists, pin the merge commit SHA.
+- `ecfr_get_section` returns long sections in 20,000-character pages with `totalLength`, `offset`, `truncated` and `nextOffset`. When `truncated` is true, call again with `offset = nextOffset` and read the whole section before relying on it.
 
 ## Examples
 
