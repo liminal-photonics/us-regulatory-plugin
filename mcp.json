@@ -5,7 +5,7 @@
       "command": "npx",
       "args": [
         "-y",
-        "github:liminal-photonics/us-regulatory-plugin"
+        "github:liminal-photonics/us-regulatory-plugin#v0.2.0"
       ]
     }
   }

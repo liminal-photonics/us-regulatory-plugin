@@ -57,12 +57,14 @@ export function xmlToText(xml) {
 
 const realDate = (d) => { const t = Date.parse(`${d}T00:00:00Z`); return Number.isFinite(t) && new Date(t).toISOString().slice(0, 10) === d; };
 
-export async function ecfrGetSection({ title, section, date } = {}) {
+export async function ecfrGetSection({ title, section, date, offset } = {}) {
   title = String(requireInt(title, "title", 1, 50));
   if (date != null && date !== "" && (!/^\d{4}-\d{2}-\d{2}$/.test(String(date)) || !realDate(String(date)))) throw new Error("date must be a real date as YYYY-MM-DD.");
   section = cleanSection(requireText(section, "section"), title);
   if (!/^\d+[A-Za-z]?\.\d+[A-Za-z0-9-]*$/.test(section)) throw new Error('section must look like "15.109" (part.section).');
   const part = section.split(".")[0];
+  const start = offset == null || offset === "" ? 0 : Number(offset);
+  if (!Number.isInteger(start) || start < 0) throw new Error("offset must be a whole number of characters, 0 or more.");
   if (date && String(date) < "2017-01-03") throw new Error(`eCFR point-in-time text starts on 2017-01-03. For ${title} CFR ${section} as of ${date}, use the annual edition of the CFR on govinfo: https://www.govinfo.gov/app/collection/cfr`);
   const latest = await latestDate(title);
   if (date && String(date) > latest) throw new Error(`eCFR title ${title} is only published up to ${latest}; use that date or earlier.`);
@@ -73,12 +75,21 @@ export async function ecfrGetSection({ title, section, date } = {}) {
   if (!res.ok) throw new Error(`eCFR HTTP ${res.status}`);
   const xml = await res.text();
   const text = xmlToText(xml);
+  // Long sections come back in 20,000-character pages. truncated/nextOffset make a partial read explicit, so a
+  // compliance claim can't rest on text that stops before the paragraph that matters.
   const MAX = 20000;
+  if (start > 0 && start >= text.length) throw new Error(`offset ${start} is past the end of the section text (${text.length} characters).`);
+  const end = Math.min(text.length, start + MAX);
+  const truncated = end < text.length;
   return {
     citation: `${title} CFR ${section}`,
     asOf,
     heading: text.split("\n")[0] || null,
-    text: text.length > MAX ? text.slice(0, MAX) + "\n[truncated]" : text,
+    text: text.slice(start, end) + (truncated ? `\n[truncated: characters ${start}-${end} of ${text.length}; call again with offset ${end} for the rest]` : ""),
+    totalLength: text.length,
+    offset: start,
+    truncated,
+    nextOffset: truncated ? end : null,
     url: `https://www.ecfr.gov/current/title-${title}/section-${section}`,
   };
 }
