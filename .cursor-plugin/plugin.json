@@ -1,7 +1,7 @@
 {
   "name": "us-regulatory",
   "displayName": "US Regulatory Research",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "description": "Look up US federal regulations in the eCFR (e.g. FCC Part 15) with citations, list standards incorporated by reference with purchase links, track new and proposed rules in the Federal Register, and look up FCC equipment authorization grantees. No API keys needed.",
   "author": {
     "name": "Liminal Photonics"

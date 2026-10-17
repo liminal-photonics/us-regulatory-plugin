@@ -7,6 +7,7 @@ import { federalRegisterSearch } from "./federalRegister.js";
 import { fccGranteeLookup } from "./fcc.js";
 import { ibrStandards, standardsLink, BODIES } from "./standards.js";
 import { status } from "./core.js";
+import { pluginVersion, stamp, versionInfo } from "./version.js";
 
 const TOOLS = [
   {
@@ -16,8 +17,8 @@ const TOOLS = [
   },
   {
     name: "ecfr_get_section",
-    description: "Get the current text of one CFR section, e.g. title 47 section 15.109. Optional date (YYYY-MM-DD, 2017-01-03 or later) for a past version.",
-    inputSchema: { type: "object", properties: { title: { type: "integer", minimum: 1, maximum: 50 }, section: { type: "string", minLength: 1, description: 'part.section, e.g. "15.109"' }, date: { type: "string" } }, required: ["title", "section"] },
+    description: "Get the current text of one CFR section, e.g. title 47 section 15.109. Optional date (YYYY-MM-DD, 2017-01-03 or later) for a past version. Long sections are paged: when truncated is true, call again with offset = nextOffset and read the whole section before relying on it.",
+    inputSchema: { type: "object", properties: { title: { type: "integer", minimum: 1, maximum: 50 }, section: { type: "string", minLength: 1, description: 'part.section, e.g. "15.109"' }, date: { type: "string" }, offset: { type: "integer", minimum: 0, description: "Character offset for long sections; use nextOffset from the previous call. Text comes in 20,000-character pages." } }, required: ["title", "section"] },
   },
   {
     name: "federal_register_search",
@@ -50,7 +51,7 @@ const TOOLS = [
     description: "Official purchase/info links for a standard: a checked product page where the body has a stable URL (UL, ASTM, IEEE, NFPA), otherwise the body's catalog search, plus ANSI Webstore search. Links only; standard text is copyrighted.",
     inputSchema: { type: "object", properties: { body: { type: "string", enum: Object.keys(BODIES) }, number: { type: "string", minLength: 1, description: 'e.g. "61010-1", "C63.4-2014", "E308-22"' }, edition: { type: "string" }, check: { type: "boolean", default: true } }, required: ["body", "number"] },
   },
-  { name: "regulatory_status", description: "Show which data sources are reachable.", inputSchema: { type: "object", properties: {} } },
+  { name: "regulatory_status", description: "Show which data sources are reachable, and the plugin version and git commit that is running.", inputSchema: { type: "object", properties: {} } },
 ];
 
 const HANDLERS = {
@@ -60,17 +61,17 @@ const HANDLERS = {
   fcc_grantee_lookup: fccGranteeLookup,
   ibr_standards: ibrStandards,
   standards_link: standardsLink,
-  regulatory_status: status,
+  regulatory_status: async (a) => ({ ...(await status(a)), ...versionInfo() }),
 };
 
-const server = new Server({ name: "us-regulatory", version: "0.1.0" }, { capabilities: { tools: {} } });
+const server = new Server({ name: "us-regulatory", version: pluginVersion().version || "0.0.0" }, { capabilities: { tools: {} } });
 server.setRequestHandler(ListToolsRequestSchema, async () => ({ tools: TOOLS }));
 server.setRequestHandler(CallToolRequestSchema, async (req) => {
   const { name, arguments: a = {} } = req.params;
   try {
     const h = HANDLERS[name];
     if (!h) throw new Error(`Unknown tool ${name}`);
-    return { content: [{ type: "text", text: JSON.stringify(await h(a), null, 2) }] };
+    return { content: [{ type: "text", text: JSON.stringify(stamp(await h(a)), null, 2) }] };
   } catch (e) {
     return { isError: true, content: [{ type: "text", text: e.message }] };
   }
